@@ -1,0 +1,16 @@
+// You have to fill it up!
+
+// Once you have completed this you can run both commands in this folder!
+// $VCPKG_ROOT\installed\x64-windows\tools\protobuf\protoc.exe --proto_path=. --cpp_out=. Tweet.proto
+// $VCPKG_ROOT\installed\x64-windows\tools\protobuf\protoc.exe --proto_path=. --grpc_out=. --plugin=protoc-gen-grpc=..\..\vcpkg\installed\x64-windows\tools\grpc\grpc_cpp_plugin.exe Tweet.proto
+// And when this is successful (no error of any kind).
+// You can use the cmake to generate the project (do this in powershell)
+// PROJECT_ROOT> mkdir Build
+// PROJECT_ROOT> cd Build
+// PROJECT_ROOT/Build> cmake .. -DCMAKE_TOOLCHAIN_FILE="$env:VCPKG_ROOT\scripts\buildsystems\vcpkg.cmake" -DVCPKG_TARGET_TRIPLET=x64-windows
+// PROJECT_ROOT/Build> start grpc-twitter.sln
+// This should start you for the next phase!
+
+syntax = "proto3";
+
+package proto;

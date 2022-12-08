@@ -1,0 +1,10 @@
+{
+	"name": "grpc-twitter",
+	"version-string": "0.2",
+	"dependencies": [
+		"grpc",
+		"protobuf",
+		"gtest",
+		"fmt"
+	]
+}

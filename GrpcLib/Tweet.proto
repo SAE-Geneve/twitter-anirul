@@ -19,30 +19,25 @@ message TweetIn {
     string user = 1;
     string content = 2;
     int64 time = 3;
-    int64 tocken = 4;
+    int64 token = 4;
 }
 
-message TweetOut {
-    bool error = 1;
-}
+message TweetOut {}
 
 message FollowIn {
     string name = 1;
-    int64 tocken = 2;
+    int64 token = 2;
 }
 
-message FollowOut {
-    bool error = 1;
-}
+message FollowOut {}
 
 message ShowIn {
     string user = 1;
-    int64 tocken = 2;
+    int64 token = 2;
 }
 
 message ShowOut {
     repeated TweetIn tweets = 1;
-    bool error = 2;
 }
 
 message LoginIn {
@@ -51,20 +46,17 @@ message LoginIn {
 }
 
 message LoginOut {
-    bool error = 1;
-    int64 tocken = 2;
+    int64 token = 1;
 }
 
 message LogoutIn {
-    int64 tocken = 1;
+    int64 token = 1;
 }
 
-message LogoutOut {
-    bool error = 1;
-}
+message LogoutOut {}
 
 message UpdateIn {
-    int64 tocken = 1;
+    int64 token = 1;
 }
 
 message UpdateOut {
@@ -77,8 +69,7 @@ message RegisterIn {
 }
 
 message RegisterOut {
-    bool error = 1;
-    int64 tocken = 2;
+    int64 token = 1;
 }
 
 service TweetService {

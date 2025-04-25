@@ -13,14 +13,15 @@ namespace tweet {
 	{
 	}
 
-	bool Storage::Tweet(std::int64_t tocken, const std::string& text)
+	Status<std::monostate> Storage::Tweet(
+		std::int64_t token, const std::string& text)
 	{
 		std::scoped_lock l(mutex_);
 		// Check if you are already login.
-		auto it = tocken_names_.find(tocken);
-		if (it == tocken_names_.end())
+		auto it = token_names_.find(token);
+		if (it == token_names_.end())
 		{
-			return false;
+			return { StatusEnum::UNAUTHENTICATED, "Invalid token" };
 		}
 		// Create a tweet with user name current.
 		TweetValue tv{};
@@ -31,28 +32,29 @@ namespace tweet {
 		tv.time = value.count();
 		tv.text = text;
 		name_tweets_.insert({ it->second, tv });
-		return true;
+		return { StatusEnum::OK };
 	}
 
-	bool Storage::Follow(std::int64_t tocken, const std::string& name)
+	Status<std::monostate> Storage::Follow(
+		std::int64_t token, const std::string& name)
 	{
 		std::scoped_lock l(mutex_);
 		// Check if you are already login.
-		auto it = tocken_names_.find(tocken);
-		if (it == tocken_names_.end())
+		auto it = token_names_.find(token);
+		if (it == token_names_.end())
 		{
-			return false;
+			return { StatusEnum::UNAUTHENTICATED, "Invalid token" };
 		}
 		// Check if user name is not current one.
 		if (name == it->second)
 		{
-			return false;
+			return { StatusEnum::INVALID_ARGUMENT, "Name doesn't correspond" };
 		}
 		// Check if user name is existing.
 		auto it_user = name_passes_.find(name);
 		if (it_user == name_passes_.end())
 		{
-			return false;
+			return { StatusEnum::INVALID_ARGUMENT, "Invalid name" };
 		}
 		// Check if this user is already registered in the DB.
 		auto range = followers_.equal_range(it->second);
@@ -62,24 +64,25 @@ namespace tweet {
 		}) == range.second)
 		{
 			followers_.insert({ it->second, name });
-			return true;
+			return { StatusEnum::OK };
 		}
-		return false;
+		return { StatusEnum::INTERNAL, "Internal error?" };
 	}
 
-	const std::vector<TweetValue> Storage::Show(
-		std::int64_t tocken,
+	Status<std::vector<TweetValue>> Storage::Show(
+		std::int64_t token,
 		const std::string& name)
 	{
 		std::scoped_lock l(mutex_);
 		// Check if you are already login.
-		if (!tocken_names_.contains(tocken))
+		if (!token_names_.contains(token))
 		{
-			return {};
+			return { 
+				StatusEnum::UNAUTHENTICATED, "You are not authenticated?"};
 		}
 		bool found = false;
 		// Check if current user.
-		auto it = tocken_names_.find(tocken);
+		auto it = token_names_.find(token);
 		if (it->second == name)
 		{
 			found = true;
@@ -107,16 +110,16 @@ namespace tweet {
 				tweet_range.second,
 				std::back_inserter(ret),
 				[](const auto& value)
-			{
-				return value.second;
-			});
-			return ret;
+				{
+					return value.second;
+				});
+			return { StatusEnum::OK, "", ret };
 		}
 		// Not found so return empty vector.
-		return {};
+		return { StatusEnum::OK, "", {} };
 	}
 
-	std::optional<std::int64_t> Storage::Login(
+	Status<std::int64_t> Storage::Login(
 		const std::string& name, 
 		const std::string& pass)
 	{
@@ -125,31 +128,31 @@ namespace tweet {
 		auto it = name_passes_.find(name);
 		if (it == name_passes_.end())
 		{
-			return std::nullopt;
+			return { StatusEnum::ALREADY_EXISTS, "You are already login" };
 		}
 		// Check the password.
 		if (pass == it->second)
 		{
-			auto tocken = GenerateTocken();
-			tocken_names_.insert({ tocken, name });
-			return tocken;
+			auto token = Generatetoken();
+			token_names_.insert({ token, name });
+			return { StatusEnum::OK, "", token };
 		}
-		return std::nullopt;
+		return { StatusEnum::UNAUTHENTICATED, "Invalid credentials" };
 	}
 
-	bool Storage::Logout(std::int64_t tocken)
+	Status<std::monostate> Storage::Logout(std::int64_t token)
 	{
 		std::scoped_lock l(mutex_);
-		auto it = tocken_names_.find(tocken);
-		if (it == tocken_names_.end())
+		auto it = token_names_.find(token);
+		if (it == token_names_.end())
 		{
-			return false;
+			return { StatusEnum::INVALID_ARGUMENT, "Invalid token" };
 		}
-		tocken_names_.erase(it);
-		return true;
+		token_names_.erase(it);
+		return { StatusEnum::OK };
 	}
 
-	std::optional<std::int64_t> Storage::Register(
+	Status<std::int64_t> Storage::Register(
 		const std::string& name, 
 		const std::string& pass)
 	{
@@ -158,22 +161,22 @@ namespace tweet {
 		auto it = name_passes_.find(name);
 		if (it != name_passes_.end())
 		{
-			return std::nullopt;
+			return { StatusEnum::ALREADY_EXISTS, "Name already taken" };
 		}
 		name_passes_.insert({ name, pass });
-		auto tocken = GenerateTocken();
-		tocken_names_.insert({ tocken, name });
-		return tocken;
+		auto token = Generatetoken();
+		token_names_.insert({ token, name });
+		return { StatusEnum::OK, "", token };
 	}
 
-	std::int64_t Storage::GenerateTocken()
+	std::int64_t Storage::Generatetoken()
 	{
 		return dist_(engine_);
 	}
 
-	std::string Storage::GetNameFromTocken(std::int64_t tocken) const
+	std::string Storage::GetNameFromtoken(std::int64_t token) const
 	{
-		return tocken_names_.at(tocken);
+		return token_names_.at(token);
 	}
 
 	std::vector<std::string> Storage::GetSubscriptions(

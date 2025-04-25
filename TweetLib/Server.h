@@ -1,16 +1,8 @@
 #pragma once
 
-#if defined(_WIN32) || defined(_WIN64)
-#pragma warning(push)
-#pragma warning(disable: 4005)
-#pragma warning(disable: 4251)
-#pragma warning(disable: 4996)
-#endif
 #include "../GrpcLib/Tweet.pb.h"
 #include "../GrpcLib/Tweet.grpc.pb.h"
-#if defined(_WIN32) || defined(_WIN64)
-#pragma warning(pop)
-#endif
+#include "../TweetLib/StatusHelper.h"
 #include "../TweetLib/Storage.h"
 
 namespace tweet {

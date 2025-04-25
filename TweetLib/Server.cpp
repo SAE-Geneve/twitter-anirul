@@ -10,11 +10,10 @@ namespace tweet {
 		proto::TweetOut* response)
 	{
 		std::cout << std::format("Tweet({})\n", context->peer());
-		response->set_error(
+		return StatusStorageToStatusGrpc(
 			storage_->Tweet(
-				request->tocken(),
+				request->token(),
 				request->content()));
-		return grpc::Status::OK;
 	}
 
 	grpc::Status Server::Follow(
@@ -23,9 +22,9 @@ namespace tweet {
 		proto::FollowOut* response)
 	{
 		std::cout << std::format("Follow({})\n", context->peer());
-		response->set_error(
+		return StatusStorageToStatusGrpc(
 			storage_->Follow(
-				request->tocken(),
+				request->token(),
 				request->name()));
 		return grpc::Status::OK;
 	}
@@ -36,10 +35,10 @@ namespace tweet {
 		proto::ShowOut* response)
 	{
 		std::cout << std::format("Show({})\n", context->peer());
-		auto tweets = storage_->Show(
-			request->tocken(),
+		auto status_tweets = storage_->Show(
+			request->token(),
 			request->user());
-		for (const auto& tweet : tweets)
+		for (const auto& tweet : status_tweets.value)
 		{
 			proto::TweetIn tweet_in{};
 			tweet_in.set_user(tweet.name);
@@ -47,8 +46,7 @@ namespace tweet {
 			tweet_in.set_time(tweet.time);
 			*response->add_tweets() = tweet_in;
 		}
-		response->set_error(true);
-		return grpc::Status::OK;
+		return StatusStorageToStatusGrpc(status_tweets);
 	}
 
 	grpc::Status Server::Login(
@@ -57,13 +55,12 @@ namespace tweet {
 		proto::LoginOut* response)
 	{
 		std::cout << std::format("Login({})\n", context->peer());
-		auto maybe_tocken = 
+		auto status_token = 
 			storage_->Login(
 				request->user(),
 				request->pass());
-		response->set_error(maybe_tocken.has_value());
-		response->set_tocken(maybe_tocken.value());
-		return grpc::Status::OK;
+		response->set_token(status_token.value);
+		return StatusStorageToStatusGrpc(status_token);
 	}
 
 	grpc::Status Server::Logout(
@@ -72,9 +69,7 @@ namespace tweet {
 		proto::LogoutOut* response)
 	{
 		std::cout << std::format("Logout({})\n", context->peer());
-		storage_->Logout(request->tocken());
-		response->set_error(true);
-		return grpc::Status::OK;
+		return StatusStorageToStatusGrpc(storage_->Logout(request->token()));
 	}
 
 	grpc::Status Server::Register(
@@ -83,13 +78,12 @@ namespace tweet {
 		proto::RegisterOut* response)
 	{
 		std::cout << std::format("Register({})\n", context->peer());
-		auto maybe_tocken =
+		auto status_token =
 			storage_->Register(
 				request->name(),
 				request->pass());
-		response->set_error(maybe_tocken.has_value());
-		response->set_tocken(maybe_tocken.value());
-		return grpc::Status::OK;
+		response->set_token(status_token.value);
+		return StatusStorageToStatusGrpc(status_token);
 	}
 
 	grpc::Status Server::Update(
@@ -99,27 +93,30 @@ namespace tweet {
 	{
 		{
 			std::lock_guard<std::mutex> lock(writers_mutex_);
-			writers_.insert({ update_in->tocken(), update_out_writer });
+			writers_.insert({ update_in->token(), update_out_writer });
 		}
 		while (!context->IsCancelled())
 		{
 			Sleep(100);
 		}
 		std::lock_guard<std::mutex> lock(writers_mutex_);
-		writers_.erase(update_in->tocken());
+		writers_.erase(update_in->token());
 		return grpc::Status::OK;
 	}
 
 	void Server::ProceedAsync()
 	{
-		std::map<int64_t, int64_t> last_seen;  // token -> last‐seen tweet time
-
+		// token -> last‐seen tweet time
+		std::map<int64_t, int64_t> last_seen;
 		while (running_)
 		{
 			std::this_thread::sleep_for(std::chrono::milliseconds(10));
 			
-			// Make a local copy of the writers so we don’t hold the lock while writing
-			std::vector<std::pair<int64_t, grpc::ServerWriter<proto::UpdateOut>*>> tasks;
+			// Make a local copy of the writers so we don’t hold the lock while
+			// writing
+			std::vector<
+				std::pair<int64_t, 
+					grpc::ServerWriter<proto::UpdateOut>*>> tasks;
 			{
 				std::scoped_lock lock(writers_mutex_);
 				for (auto& [token, writer] : writers_)
@@ -141,25 +138,13 @@ namespace tweet {
 				// 2) Gather any new tweets from *whom this user follows*
 				proto::UpdateOut response;
 				std::multimap<int64_t, proto::TweetIn> sorted;
-				std::string me = storage_->GetNameFromTocken(token);
+				std::string me = storage_->GetNameFromtoken(token);
 				// make sure this returns *who I follow*
 				auto following = storage_->GetSubscriptions(me);
-				std::cout 
-					<< "[proc] token=" 
-					<< token 
-					<< " follows=" 
-					<< following.size() 
-					<< " users\n";
 				for (auto& followed_user : following)
 				{
-					std::cout << "   -> " << followed_user << "\n";
-					auto fresh = storage_->GetTweetsFromNameTime(followed_user, cutoff);
-					std::cout 
-						<< "       tweets from " 
-						<< followed_user 
-						<< ": " 
-						<< fresh.size()
-						<< "\n";
+					auto fresh = 
+						storage_->GetTweetsFromNameTime(followed_user, cutoff);
 					for (auto& tw : fresh)
 					{
 						proto::TweetIn ti;
@@ -171,10 +156,6 @@ namespace tweet {
 				}
 
 				// 3) Keep only strictly newer tweets and bump the cutoff
-				std::cout << "[proc] token=" << token
-					<< " last_seen before=" << cutoff << "\n";
-				std::cout << "[proc] token=" << token
-					<< " total gathered tweets=" << sorted.size() << "\n";
 				for (auto& [ts, ti] : sorted) 
 				{
 					if (ts > cutoff)

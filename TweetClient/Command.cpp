@@ -70,14 +70,9 @@ namespace client {
 		std::getline(std::cin, text);
 		proto::TweetIn tweet_in{};
 		tweet_in.set_content(text);
-		proto::TweetOut tweet_out = client_->Tweet(tweet_in);
-		if (!tweet_out.error())
-		{
-			std::cout << "Successful!" << std::endl;
-			return true;
-		}
-		std::cout << "Error!" << std::endl;
-		return false;
+		std::scoped_lock l(client_mutex_);
+		auto tweet_status = client_->Tweet(tweet_in);
+		return tweet_status.Ok();
 	}
 
 	bool Command::Follow()
@@ -89,18 +84,9 @@ namespace client {
 		std::cin >> follow;
 		proto::FollowIn follow_in{};
 		follow_in.set_name(follow);
-		proto::FollowOut follow_out = client_->Follow(follow_in);
-		if (!follow_out.error())
-		{
-			std::cout 
-				<< "Successfully following: [" 
-				<< follow 
-				<< "]" 
-				<< std::endl;
-			return true;
-		}
-		std::cout << "Couldn't follow: [" << follow << "]" << std::endl;
-		return false;
+		std::scoped_lock l(client_mutex_);
+		auto status = client_->Follow(follow_in);
+		return status.Ok();
 	}
 
 	bool Command::Show()
@@ -112,30 +98,31 @@ namespace client {
 		std::cin >> user;
 		proto::ShowIn show_in{};
 		show_in.set_user(user);
-		proto::ShowOut show_out = client_->Show(show_in);
-		if (!show_out.error())
+		proto::ShowOut show_out;
+		std::scoped_lock l(client_mutex_);
+		auto show_status = client_->Show(show_in);
+		if (!show_status.Ok())
 		{
-			if (!show_out.mutable_tweets()->empty())
+			return false;
+		}
+		if (!show_status.value.mutable_tweets()->empty())
+		{
+			auto it = show_out.tweets().cbegin();
+			std::cout 
+				<< "tweet from user: [" 
+				<< it->user() 
+				<< "]" 
+				<< std::endl;
+			for (const auto& tweet_in : show_out.tweets())
 			{
-				auto it = show_out.tweets().cbegin();
-				std::cout 
-					<< "tweet from user: [" 
-					<< it->user() 
-					<< "]" 
-					<< std::endl;
-				for (const auto& tweet_in : show_out.tweets())
-				{
-					std::cout << "\t" << tweet_in.time() << "\t";
-					std::cout << tweet_in.content() << std::endl;
-				}
-				std::cout << "done" << std::endl;
-				return true;
+				std::cout << "\t" << tweet_in.time() << "\t";
+				std::cout << tweet_in.content() << std::endl;
 			}
-			std::cout << "no tweet from user: [" << user << "]" << std::endl;
+			std::cout << "done" << std::endl;
 			return true;
 		}
 		std::cout << "no tweet from user: [" << user << "]" << std::endl;
-		return false;
+		return true;
 	}
 
 	bool Command::Login()
@@ -152,32 +139,29 @@ namespace client {
 		proto::LoginIn login_in{};
 		login_in.set_user(name);
 		login_in.set_pass(pass);
-		proto::LoginOut login_out = client_->Login(login_in);
-		if (!login_out.error())
+		std::scoped_lock l(client_mutex_);
+		auto login_status = client_->Login(login_in);
+		if (!login_status.Ok())
 		{
-			std::cout 
-				<< "successfully log in as : [" 
-				<< name 
-				<< "]." 
-				<< std::endl;
-			return true;
+			std::cout << "couldn't login..." << std::endl;
+			return false;
 		}
-		std::cout << "couldn't login..." << std::endl;
-		return false;
+		std::cout 
+			<< "successfully log in as : [" 
+			<< name 
+			<< "]." 
+			<< std::endl;
+		return true;
 	}
 
 	bool Command::LogOut()
 	{
 		std::cout << "LOGOUT" << std::endl;
-		proto::LogoutIn logout_in{};
-		proto::LogoutOut logout_out = client_->Logout(logout_in);
-		if (!logout_out.error())
-		{
-			std::cout << "Successful!" << std::endl;
-			return true;
-		}
-		std::cout << "Error!" << std::endl;
-		return false;
+		proto::LogoutIn logout_in;
+		std::scoped_lock l(client_mutex_);
+		logout_in.set_token(token_.value());
+		auto logout_status = client_->Logout(logout_in);
+		return logout_status.Ok();
 	}
 
 	bool Command::Register()
@@ -194,14 +178,59 @@ namespace client {
 		proto::RegisterIn register_in{};
 		register_in.set_name(name);
 		register_in.set_pass(pass);
-		proto::RegisterOut register_out = client_->Register(register_in);
-		if (!register_out.error())
+		std::scoped_lock l(client_mutex_);
+		auto register_status = client_->Register(register_in);
+		if (register_status.Ok())
 		{
+			token_ = register_status.value.token();
 			std::cout << "Successful!" << std::endl;
 			return true;
 		}
+		token_ = std::nullopt;
 		std::cout << "Error!" << std::endl;
 		return false;
+	}
+
+	void Command::ProceedAsync()
+	{
+		// Wait for the token to be set.
+		bool token_valid = false;
+		while (!token_valid)
+		{
+			std::this_thread::sleep_for(std::chrono::milliseconds(10));
+			std::scoped_lock l(client_mutex_);
+			token_valid = token_.has_value();
+		}
+
+		proto::UpdateIn req;
+		{
+			std::scoped_lock l(client_mutex_);
+			req.set_token(token_.value());
+		}
+
+		grpc::ClientContext context;
+		auto reader = client_->Update(&context, req);
+
+		proto::UpdateOut resp;
+		while (reader->Read(&resp)) {
+			// Got one batch of new tweets!
+			// Lock your console/UI mutex, then dump them:
+			std::lock_guard<std::mutex> lock(client_mutex_);
+			for (const auto& t : resp.tweets()) {
+				std::cout
+					<< "\r[" << t.time() << "]\t"
+					<< t.user() << "\t:\t"
+					<< t.content() << "\n";
+			}
+		}
+
+		// The stream is closed; check whether it ended OK
+		grpc::Status status = reader->Finish();
+		if (!status.ok()) {
+			std::lock_guard<std::mutex> lock(client_mutex_);
+			std::cerr << "Update stream closed: "
+				<< status.error_message() << "\n";
+		}
 	}
 
 } // End namespace client.

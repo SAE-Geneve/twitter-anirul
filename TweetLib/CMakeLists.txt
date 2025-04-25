@@ -6,6 +6,8 @@ add_library(TweetLib
     Client.cpp
     Server.h
     Server.cpp
+    Status.h
+    StatusHelper.h
     Storage.h
     Storage.cpp
 )

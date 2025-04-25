@@ -4,38 +4,50 @@ namespace tweet {
 
 	proto::TweetOut Client::Tweet(const proto::TweetIn in)
 	{
-#pragma message ("You have to complete this code!")
-		return {};
+		proto::TweetOut out;
+		grpc::ClientContext context;
+		stub_->Tweet(&context, in, &out);
+		return out;
 	}
 
 	proto::FollowOut Client::Follow(const proto::FollowIn in)
 	{
-#pragma message ("You have to complete this code!")
-		return {};
+		proto::FollowOut out;
+		grpc::ClientContext context;
+		stub_->Follow(&context, in, &out);
+		return out;
 	}
 
 	proto::ShowOut Client::Show(const proto::ShowIn in)
 	{
-#pragma message ("You have to complete this code!")
-		return {};
+		proto::ShowOut out;
+		grpc::ClientContext context;
+		stub_->Show(&context, in, &out);
+		return out;
 	}
 
 	proto::LoginOut Client::Login(const proto::LoginIn in)
 	{
-#pragma message ("You have to complete this code!")
-		return {};
+		proto::LoginOut out;
+		grpc::ClientContext context;
+		stub_->Login(&context, in, &out);
+		return out;
 	}
 
 	proto::LogoutOut Client::Logout(const proto::LogoutIn in)
 	{
-#pragma message ("You have to complete this code!")
-		return {};
+		proto::LogoutOut out;
+		grpc::ClientContext context;
+		stub_->Logout(&context, in, &out);
+		return out;
 	}
 
 	proto::RegisterOut Client::Register(const proto::RegisterIn in)
 	{
-#pragma message ("You have to complete this code!")
-		return {};
+		proto::RegisterOut out;
+		grpc::ClientContext context;
+		stub_->Register(&context, in, &out);
+		return out;
 	}
 
 } // End namespace tweet.

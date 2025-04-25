@@ -44,9 +44,16 @@ namespace tweet {
 			grpc::ServerContext* context,
 			const proto::RegisterIn* request,
 			proto::RegisterOut* response) override;
+		grpc::Status Update(
+			grpc::ServerContext* context,
+			const proto::UpdateIn* update_in,
+			grpc::ServerWriter<proto::UpdateOut>* update_out_writer) override;
+		void ProceedAsync();
 
 	private:
 		const std::shared_ptr<Storage> storage_;
+		std::map<std::int64_t, grpc::ServerWriter<proto::UpdateOut>*> writers_;
+		std::mutex writers_mutex_;
 	};
 
 }

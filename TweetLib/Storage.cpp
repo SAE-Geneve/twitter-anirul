@@ -1,15 +1,24 @@
 #include "Storage.h"
 #include <algorithm>
 #include <iterator>
+#include <chrono>
+#include <map>
 
 namespace tweet {
 
-	bool Storage::Tweet(const std::string& context, const std::string& text)
+	Storage::Storage() : 
+		engine_(std::random_device{}()),
+		dist_(std::numeric_limits<std::int64_t>::min(),
+			std::numeric_limits<std::int64_t>::max())
+	{
+	}
+
+	bool Storage::Tweet(std::int64_t tocken, const std::string& text)
 	{
 		std::scoped_lock l(mutex_);
 		// Check if you are already login.
-		auto it = context_names_.find(context);
-		if (it == context_names_.end())
+		auto it = tocken_names_.find(tocken);
+		if (it == tocken_names_.end())
 		{
 			return false;
 		}
@@ -25,12 +34,12 @@ namespace tweet {
 		return true;
 	}
 
-	bool Storage::Follow(const std::string& context, const std::string& name)
+	bool Storage::Follow(std::int64_t tocken, const std::string& name)
 	{
 		std::scoped_lock l(mutex_);
 		// Check if you are already login.
-		auto it = context_names_.find(context);
-		if (it == context_names_.end())
+		auto it = tocken_names_.find(tocken);
+		if (it == tocken_names_.end())
 		{
 			return false;
 		}
@@ -59,19 +68,19 @@ namespace tweet {
 	}
 
 	const std::vector<TweetValue> Storage::Show(
-		const std::string& context,
+		std::int64_t tocken,
 		const std::string& name)
 	{
 		std::scoped_lock l(mutex_);
 		// Check if you are already login.
-		auto it = context_names_.find(context);
-		if (it == context_names_.end())
+		if (!tocken_names_.contains(tocken))
 		{
 			return {};
 		}
 		bool found = false;
 		// Check if current user.
-		if (name == it->second)
+		auto it = tocken_names_.find(tocken);
+		if (it->second == name)
 		{
 			found = true;
 		}
@@ -107,8 +116,7 @@ namespace tweet {
 		return {};
 	}
 
-	bool Storage::Login(
-		const std::string& context, 
+	std::optional<std::int64_t> Storage::Login(
 		const std::string& name, 
 		const std::string& pass)
 	{
@@ -117,31 +125,31 @@ namespace tweet {
 		auto it = name_passes_.find(name);
 		if (it == name_passes_.end())
 		{
-			return false;
+			return std::nullopt;
 		}
 		// Check the password.
 		if (pass == it->second)
 		{
-			context_names_.insert({ context, name });
-			return true;
+			auto tocken = GenerateTocken();
+			tocken_names_.insert({ tocken, name });
+			return tocken;
 		}
-		return false;
+		return std::nullopt;
 	}
 
-	bool Storage::Logout(const std::string& context)
+	bool Storage::Logout(std::int64_t tocken)
 	{
 		std::scoped_lock l(mutex_);
-		auto it = context_names_.find(context);
-		if (it == context_names_.end())
+		auto it = tocken_names_.find(tocken);
+		if (it == tocken_names_.end())
 		{
 			return false;
 		}
-		context_names_.erase(it);
+		tocken_names_.erase(it);
 		return true;
 	}
 
-	bool Storage::Register(
-		const std::string& context, 
+	std::optional<std::int64_t> Storage::Register(
 		const std::string& name, 
 		const std::string& pass)
 	{
@@ -150,11 +158,51 @@ namespace tweet {
 		auto it = name_passes_.find(name);
 		if (it != name_passes_.end())
 		{
-			return false;
+			return std::nullopt;
 		}
 		name_passes_.insert({ name, pass });
-		context_names_.insert({ context, name });
-		return true;
+		auto tocken = GenerateTocken();
+		tocken_names_.insert({ tocken, name });
+		return tocken;
+	}
+
+	std::int64_t Storage::GenerateTocken()
+	{
+		return dist_(engine_);
+	}
+
+	std::string Storage::GetNameFromTocken(std::int64_t tocken) const
+	{
+		return tocken_names_.at(tocken);
+	}
+
+	std::vector<std::string> Storage::GetFollowerList(
+		const std::string& name) const
+	{
+		std::vector<std::string> out;
+		out.push_back(name);
+		auto range = followers_.equal_range(name);
+		for (auto it = range.first; it != range.second; ++it)
+		{
+			out.push_back(it->second);
+		}
+		return out;
+	}
+
+	std::vector<TweetValue> Storage::GetTweetsFromNameTime(
+		const std::string& name,
+		std::int64_t time_s) const
+	{
+		std::vector<TweetValue> tweets;
+		auto range = name_tweets_.equal_range(name);
+		for (auto it = range.first; it != range.second; ++it)
+		{
+			if (it->second.time > time_s)
+			{
+				tweets.push_back(it->second);
+			}
+		}
+		return tweets;
 	}
 
 } // End namespace tweet.

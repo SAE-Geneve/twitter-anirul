@@ -176,7 +176,7 @@ namespace tweet {
 		return tocken_names_.at(tocken);
 	}
 
-	std::vector<std::string> Storage::GetFollowerList(
+	std::vector<std::string> Storage::GetSubscriptions(
 		const std::string& name) const
 	{
 		std::vector<std::string> out;

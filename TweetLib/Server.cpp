@@ -1,4 +1,4 @@
-#include "Server.h"
+﻿#include "Server.h"
 
 #include <format>
 
@@ -112,67 +112,91 @@ namespace tweet {
 
 	void Server::ProceedAsync()
 	{
-		bool proceed = true;
-		std::map<std::int64_t, std::int64_t> user_start_time;
-		while (proceed)
+		std::map<int64_t, int64_t> last_seen;  // token -> last‐seen tweet time
+
+		while (running_)
 		{
-			Sleep(10);
-			std::scoped_lock lock(writers_mutex_);
-			for (const auto& [key, value] : writers_)
+			std::this_thread::sleep_for(std::chrono::milliseconds(10));
+			
+			// Make a local copy of the writers so we don’t hold the lock while writing
+			std::vector<std::pair<int64_t, grpc::ServerWriter<proto::UpdateOut>*>> tasks;
 			{
-				if (!user_start_time.contains(key))
+				std::scoped_lock lock(writers_mutex_);
+				for (auto& [token, writer] : writers_)
 				{
-					std::cout << "created the first value." << std::endl;
-					user_start_time.insert({ key, 0 });
+					tasks.emplace_back(token, writer);
 				}
-				proto::UpdateOut update_out;
-				std::multimap<std::int64_t, proto::TweetIn> tweets_map;
-				std::string name = storage_->GetNameFromTocken(key);
-				auto follows = storage_->GetFollowerList(name);
-				for (const auto& follow : follows)
+			}
+
+			// Process each client’s stream independently
+			for (auto& [token, writer] : tasks)
+			{
+				// 1) Figure out the cutoff
+				int64_t cutoff = 0;
+				if (auto it = last_seen.find(token); it != last_seen.end())
 				{
-					auto tweets = 
-						storage_->GetTweetsFromNameTime(
-							follow, user_start_time.at(key));
-					for (const auto& tweet : tweets)
+					cutoff = it->second;
+				}
+
+				// 2) Gather any new tweets from *whom this user follows*
+				proto::UpdateOut response;
+				std::multimap<int64_t, proto::TweetIn> sorted;
+				std::string me = storage_->GetNameFromTocken(token);
+				// make sure this returns *who I follow*
+				auto following = storage_->GetSubscriptions(me);
+				std::cout 
+					<< "[proc] token=" 
+					<< token 
+					<< " follows=" 
+					<< following.size() 
+					<< " users\n";
+				for (auto& followed_user : following)
+				{
+					std::cout << "   -> " << followed_user << "\n";
+					auto fresh = storage_->GetTweetsFromNameTime(followed_user, cutoff);
+					std::cout 
+						<< "       tweets from " 
+						<< followed_user 
+						<< ": " 
+						<< fresh.size()
+						<< "\n";
+					for (auto& tw : fresh)
 					{
-						proto::TweetIn tweet_in;
-						tweet_in.set_user(tweet.name);
-						tweet_in.set_content(tweet.text);
-						tweet_in.set_time(tweet.time);
-						tweets_map.insert({ tweet.time, tweet_in });
+						proto::TweetIn ti;
+						ti.set_user(tw.name);
+						ti.set_content(tw.text);
+						ti.set_time(tw.time);
+						sorted.insert({ tw.time, ti });
 					}
 				}
-				auto time = user_start_time.at(key);
-				for (const auto& [time, value] : tweets_map)
+
+				// 3) Keep only strictly newer tweets and bump the cutoff
+				std::cout << "[proc] token=" << token
+					<< " last_seen before=" << cutoff << "\n";
+				std::cout << "[proc] token=" << token
+					<< " total gathered tweets=" << sorted.size() << "\n";
+				for (auto& [ts, ti] : sorted) 
 				{
-					std::cout << std::format(
-						"go throught all the elements: [{}, {}]\n",
-						time,
-						value.user());
-					if (value.time() >= time)
+					if (ts > cutoff)
 					{
-						*update_out.add_tweets() = value;
-						user_start_time.at(key) = 
-							std::max(user_start_time.at(key), value.time());
+						*response.add_tweets() = ti;
+						cutoff = ts;
 					}
 				}
-				if (update_out.tweets_size())
+
+				// 4) If there was anything new, push it to _this_ client
+				if (response.tweets_size() > 0)
 				{
-					for (auto& [key, writer] : writers_)
+					if (!writer->Write(response))
 					{
-						if (writer->Write(update_out))
-						{
-							std::cout << 
-								std::format(
-									"Send to user: {}.\n", key);
-						}
-						else
-						{
-							std::cerr << 
-								std::format(
-									"Couldn't send to user: {}!\n", key);
-						}
+						// client probably disconnected; clean up
+						std::scoped_lock lock(writers_mutex_);
+						writers_.erase(token);
+						last_seen.erase(token);
+					}
+					else
+					{
+						last_seen[token] = cutoff;
 					}
 				}
 			}

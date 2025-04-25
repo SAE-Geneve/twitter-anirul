@@ -36,7 +36,7 @@ namespace tweet {
 			const std::string& pass);
 		std::int64_t GenerateTocken();
 		std::string GetNameFromTocken(std::int64_t tocken) const;
-		std::vector<std::string> GetFollowerList(
+		std::vector<std::string> GetSubscriptions(
 			const std::string& name) const;
 		std::vector<TweetValue> GetTweetsFromNameTime(
 			const std::string& name,

@@ -54,6 +54,7 @@ namespace tweet {
 		const std::shared_ptr<Storage> storage_;
 		std::map<std::int64_t, grpc::ServerWriter<proto::UpdateOut>*> writers_;
 		std::mutex writers_mutex_;
+		bool running_ = true;
 	};
 
 }

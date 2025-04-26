@@ -121,7 +121,10 @@ namespace tweet {
 				std::scoped_lock lock(writers_mutex_);
 				for (auto& [token, writer] : writers_)
 				{
-					tasks.emplace_back(token, writer);
+					if (storage_->TokenContains(token))
+					{
+						tasks.emplace_back(token, writer);
+					}
 				}
 			}
 

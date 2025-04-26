@@ -44,6 +44,7 @@ namespace tweet {
 		std::vector<TweetValue> GetTweetsFromNameTime(
 			const std::string& name,
 			std::int64_t time_s) const;
+		bool TokenContains(std::int64_t token) const;
 
 	protected:
 		std::mutex mutex_ = {}; 

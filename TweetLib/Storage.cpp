@@ -208,4 +208,9 @@ namespace tweet {
 		return tweets;
 	}
 
+	bool Storage::TokenContains(std::int64_t token) const
+	{
+		return token_names_.contains(token);
+	}
+
 } // End namespace tweet.

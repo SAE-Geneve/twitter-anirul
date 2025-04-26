@@ -64,11 +64,17 @@ namespace client {
 	bool Command::Tweet()
 	{
 		std::cout << "TWEET" << std::endl;
+		if (!token_.has_value())
+		{
+			std::cerr << "You should login (or register) first!\n";
+			return false;
+		}
 		std::cout << "I feel like tweeting: " << std::endl;
 		std::cout << " > ";
 		std::string text;
 		std::getline(std::cin, text);
 		proto::TweetIn tweet_in{};
+		tweet_in.set_token(token_.value());
 		tweet_in.set_content(text);
 		std::scoped_lock l(client_mutex_);
 		auto tweet_status = client_->Tweet(tweet_in);
@@ -78,12 +84,18 @@ namespace client {
 	bool Command::Follow()
 	{
 		std::cout << "FOLLOW" << std::endl;
+		if (!token_.has_value())
+		{
+			std::cerr << "You should login (or register) first!\n";
+			return false;
+		}
 		std::cout << "I want to follow: " << std::endl;
 		std::cout << " > ";
 		std::string follow;
 		std::cin >> follow;
 		proto::FollowIn follow_in{};
 		follow_in.set_name(follow);
+        follow_in.set_token(token_.value());
 		std::scoped_lock l(client_mutex_);
 		auto status = client_->Follow(follow_in);
 		return status.Ok();
@@ -92,13 +104,18 @@ namespace client {
 	bool Command::Show()
 	{
 		std::cout << "SHOW" << std::endl;
+		if (!token_.has_value())
+		{
+			std::cerr << "You should login (or register) first!\n";
+			return false;
+		}
 		std::cout << "Show me the tweet from user: " << std::endl;
 		std::cout << " > ";
 		std::string user;
 		std::cin >> user;
 		proto::ShowIn show_in{};
 		show_in.set_user(user);
-		proto::ShowOut show_out;
+        show_in.set_token(token_.value());
 		std::scoped_lock l(client_mutex_);
 		auto show_status = client_->Show(show_in);
 		if (!show_status.Ok())
@@ -107,13 +124,8 @@ namespace client {
 		}
 		if (!show_status.value.mutable_tweets()->empty())
 		{
-			auto it = show_out.tweets().cbegin();
-			std::cout 
-				<< "tweet from user: [" 
-				<< it->user() 
-				<< "]" 
-				<< std::endl;
-			for (const auto& tweet_in : show_out.tweets())
+			std::cout << "tweet from user: [" << user << "]\n";
+			for (const auto& tweet_in : show_status.value.tweets())
 			{
 				std::cout << "\t" << tweet_in.time() << "\t";
 				std::cout << tweet_in.content() << std::endl;
@@ -144,6 +156,7 @@ namespace client {
 		if (!login_status.Ok())
 		{
 			std::cout << "couldn't login..." << std::endl;
+            token_ = std::nullopt;
 			return false;
 		}
 		std::cout 
@@ -151,12 +164,18 @@ namespace client {
 			<< name 
 			<< "]." 
 			<< std::endl;
+        token_ = login_status.value.token();
 		return true;
 	}
 
 	bool Command::LogOut()
 	{
 		std::cout << "LOGOUT" << std::endl;
+		if (!token_.has_value())
+		{
+			std::cerr << "You should login (or register) first!\n";
+			return false;
+		}
 		proto::LogoutIn logout_in;
 		std::scoped_lock l(client_mutex_);
 		logout_in.set_token(token_.value());

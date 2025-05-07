@@ -14,3 +14,70 @@
 syntax = "proto3";
 
 package proto;
+
+message TweetIn {
+    string user = 1;
+    string content = 2;
+    int64 time = 3;
+    int64 token = 4;
+}
+
+message TweetOut {}
+
+message FollowIn {
+    string name = 1;
+    int64 token = 2;
+}
+
+message FollowOut {}
+
+message ShowIn {
+    string user = 1;
+    int64 token = 2;
+}
+
+message ShowOut {
+    repeated TweetIn tweets = 1;
+}
+
+message LoginIn {
+    string user = 1;
+    string pass = 2;
+}
+
+message LoginOut {
+    int64 token = 1;
+}
+
+message LogoutIn {
+    int64 token = 1;
+}
+
+message LogoutOut {}
+
+message UpdateIn {
+    int64 token = 1;
+}
+
+message UpdateOut {
+    repeated TweetIn tweets = 1;
+}
+
+message RegisterIn {
+    string name = 1;
+    string pass = 2;
+}
+
+message RegisterOut {
+    int64 token = 1;
+}
+
+service TweetService {
+    rpc Tweet(TweetIn) returns (TweetOut);
+    rpc Follow(FollowIn) returns (FollowOut);
+    rpc Show(ShowIn) returns (ShowOut);
+    rpc Login(LoginIn) returns (LoginOut);
+    rpc Logout(LogoutIn) returns (LogoutOut);
+    rpc Update(UpdateIn) returns (stream UpdateOut);
+    rpc Register(RegisterIn) returns (RegisterOut);
+}

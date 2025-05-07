@@ -14,12 +14,24 @@ namespace test {
 		ASSERT_FALSE(storage_);
 		storage_ = std::make_shared<tweet::Storage>();
 		ASSERT_TRUE(storage_);
-		EXPECT_FALSE(storage_->Login("context", "name", "right"));
-		EXPECT_TRUE(storage_->Register("context", "name", "right"));
-		EXPECT_TRUE(storage_->Logout("context"));
-		EXPECT_FALSE(storage_->Login("context", "name", "wrong"));
-		EXPECT_TRUE(storage_->Login("context", "name", "right"));
-		EXPECT_TRUE(storage_->Logout("context"));
+		{
+			auto status_token = storage_->Login("name", "right");
+			EXPECT_FALSE(status_token.Ok());
+		}
+		{
+			auto status_token = storage_->Register("name", "right");
+			EXPECT_TRUE(status_token.Ok());
+			EXPECT_TRUE(storage_->Logout(status_token.value).Ok());
+		}
+		{
+			auto status_token = storage_->Login("name", "wrong");
+			EXPECT_FALSE(status_token.Ok());
+		}
+		{
+			auto status_token = storage_->Login("name", "right");
+			EXPECT_TRUE(status_token.Ok());
+			EXPECT_TRUE(storage_->Logout(status_token.value).Ok());
+		}
 	}
 
 	TEST_F(StorageTest, TweetStorageTest)
@@ -27,12 +39,14 @@ namespace test {
 		ASSERT_FALSE(storage_);
 		storage_ = std::make_shared<tweet::Storage>();
 		ASSERT_TRUE(storage_);
-		EXPECT_TRUE(storage_->Register("context", "name", "right"));
-		EXPECT_TRUE(storage_->Tweet("context", "Hello a tous!"));
-		auto values = storage_->Show("context", "name");
-		EXPECT_EQ("Hello a tous!", values.begin()->text);
-		EXPECT_EQ("name", values.begin()->name);
-		EXPECT_TRUE(storage_->Logout("context"));
+		auto status_token = storage_->Register("name", "right");
+		EXPECT_TRUE(status_token.Ok());
+		EXPECT_TRUE(storage_->Tweet(status_token.value, "Hello a tous!").Ok());
+		auto status_values = storage_->Show(status_token.value, "name");
+		EXPECT_TRUE(status_values.Ok());
+		EXPECT_EQ("Hello a tous!", status_values.value.begin()->text);
+		EXPECT_EQ("name", status_values.value.begin()->name);
+		EXPECT_TRUE(storage_->Logout(status_token.value).Ok());
 	}
 
 	TEST_F(StorageTest, FollowStorageTest)
@@ -40,19 +54,27 @@ namespace test {
 		ASSERT_FALSE(storage_);
 		storage_ = std::make_shared<tweet::Storage>();
 		ASSERT_TRUE(storage_);
-		EXPECT_TRUE(storage_->Register("context", "name", "right"));
-		EXPECT_TRUE(storage_->Tweet("context", "Hello a tous!"));
-		EXPECT_TRUE(storage_->Tweet("context", "Re hello all!"));
 		{
-			auto values = storage_->Show("context", "name");
-			EXPECT_EQ(2, values.size());
+			auto status_token = storage_->Register("name", "right");
+			EXPECT_TRUE(status_token.Ok());
+			EXPECT_TRUE(storage_->Tweet(status_token.value, "Hello a tous!").Ok());
+			EXPECT_TRUE(storage_->Tweet(status_token.value, "Re hello all!").Ok());
+			{
+				auto status_values = storage_->Show(status_token.value, "name");
+				EXPECT_TRUE(status_values.Ok());
+				EXPECT_EQ(2, status_values.value.size());
+			}
+			EXPECT_TRUE(storage_->Logout(status_token.value).Ok());
 		}
-		EXPECT_TRUE(storage_->Logout("context"));
-		EXPECT_TRUE(storage_->Register("context2", "name2", "right2"));
-		EXPECT_TRUE(storage_->Follow("context2", "name"));
 		{
-			auto values = storage_->Show("context2", "name");
-			EXPECT_EQ(2, values.size());
+			auto status_token = storage_->Register("name2", "right2");
+			EXPECT_TRUE(status_token.Ok());
+			EXPECT_TRUE(storage_->Follow(status_token.value, "name").Ok());
+			{
+				auto status_values = storage_->Show(status_token.value, "name");
+				EXPECT_TRUE(status_values.Ok());
+				EXPECT_EQ(2, status_values.value.size());
+			}
 		}
 	}
 

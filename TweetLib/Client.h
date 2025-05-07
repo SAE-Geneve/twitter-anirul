@@ -1,18 +1,10 @@
 #pragma once
 
 #include <memory>
-#if defined(_WIN32) || defined(_WIN64)
-#pragma warning(push)
-#pragma warning(disable: 4005)
-#pragma warning(disable: 4251)
-#pragma warning(disable: 4996)
-#endif
 #include <grpcpp/channel.h>
 #include "../GrpcLib/Tweet.pb.h"
 #include "../GrpcLib/Tweet.grpc.pb.h"
-#if defined(_WIN32) || defined(_WIN64)
-#pragma warning(pop)
-#endif
+#include "../TweetLib/StatusHelper.h"
 
 namespace tweet {
 
@@ -23,12 +15,14 @@ namespace tweet {
 			stub_(std::move(stub)) {}
 		Client(std::shared_ptr<grpc::Channel> channel) :
 			stub_(proto::TweetService::NewStub(channel)) {}
-		proto::TweetOut Tweet(const proto::TweetIn in);
-		proto::FollowOut Follow(const proto::FollowIn in);
-		proto::ShowOut Show(const proto::ShowIn in);
-		proto::LoginOut Login(const proto::LoginIn in);
-		proto::LogoutOut Logout(const proto::LogoutIn in);
-		proto::RegisterOut Register(const proto::RegisterIn in);
+		Status<proto::TweetOut> Tweet(const proto::TweetIn in);
+		Status<proto::FollowOut> Follow(const proto::FollowIn in);
+		Status<proto::ShowOut> Show(const proto::ShowIn in);
+		Status<proto::LoginOut> Login(const proto::LoginIn in);
+		Status<proto::LogoutOut> Logout(const proto::LogoutIn in);
+		Status<proto::RegisterOut> Register(const proto::RegisterIn in);
+		std::unique_ptr<grpc::ClientReader<proto::UpdateOut>> Update(
+			grpc::ClientContext* context, const proto::UpdateIn& in);
 
 	protected:
 		std::unique_ptr<proto::TweetService::Stub> stub_;

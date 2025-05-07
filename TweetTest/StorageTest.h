@@ -1,6 +1,7 @@
 #pragma once
 
 #include <gtest/gtest.h>
+#include "../TweetLib/Status.h"
 #include "../TweetLib/Storage.h"
 
 namespace test {

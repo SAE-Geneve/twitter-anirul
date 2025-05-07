@@ -12,6 +12,7 @@ namespace client {
 		Command(std::shared_ptr<tweet::Client>& client) : client_(client) {}
 		// Run until the end (this take the hand on the main program).
 		void Run();
+		void ProceedAsync();
 
 	protected:
 		bool LoginRegisterQuit();
@@ -26,6 +27,8 @@ namespace client {
 		bool Register();
 
 	protected:
+		std::mutex client_mutex_;
+		std::optional<std::int64_t> token_ = std::nullopt;
 		std::shared_ptr<tweet::Client> client_;
 	};
 
